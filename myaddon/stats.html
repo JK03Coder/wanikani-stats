@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>WaniKani Stats</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<section class="container main-content">
+
+<section name="current_status">
+  <h1>Current Status</h1>
+
+  <table name="current_status">
+    <tbody><tr>
+      <th>Level:</th>
+      <td id="user_level">?</td>
+    </tr>
+    <tr>
+      <th>Typical Level-up:</th>
+      <td id="typical_levelup">   0 days,  0 hours,  0 minutes</td>
+    </tr>
+    <tr>
+      <th>Time on Level:</th>
+      <td id="time_on_level">    0 days,  0 hours, 0 minutes</td>
+    </tr>
+    <tr class="level_up_in">
+      <th>Level-up In:</th>
+      <td id="levelup_in">   0 days,  0 hours,  0 minutes</td>
+    </tr>
+    <tr>
+      <th data-label-id="start_date">Start Date:</th>
+      <td id="start_date">2023-10-18 (96 days ago)</td>
+    </tr>
+    <tr class="end_date">
+      <th>Estimated End Date:</th>
+      <td id="end_date">2024-10-9 (260 days)</td>
+    </tr>
+    <tr>
+      <th class="row_header">Items Learned:</th>
+      <td>
+        <span class="rad" lang="ja"><span id="radicals_learned">0</span>部首</span>
+        <span class="kan" lang="ja"><span id="kanji_learned">0</span>漢字</span>
+        <span class="voc" lang="ja"><span id="vocabulary_learned">0</span>単語</span>
+      </td>
+    </tr>
+</tbody></table>
+</section>
+
+<section name="accuracy">
+  <h1><span>Accuracy</span></h1>
+
+  <table name="accuracy">
+    <tbody><tr class="header border-bottom">
+      <th></th><th>Reading</th><th>Meaning</th><th>Total</th>
+    </tr>
+    <tr>
+      <th>Total Reviews:</th>
+      <td id="total_readings">0</td>
+      <td id="total_meanings">0</td>
+      <td id="total_reviews">0</td>
+    </tr>
+    <tr>
+      <th>Correct:</th>
+      <td id="correct_readings">0</td>
+      <td id="correct_meanings">0</td>
+      <td id="correct_reviews">0</td>
+    </tr>
+    <tr>
+      <th>Incorrect:</th>
+      <td id="incorrect_readings">0</td>
+      <td id="incorrect_meanings">0</td>
+      <td id="incorrect_reviews">0</td>
+    </tr>
+    <tr class="border-bottom">
+      <th>Accuracy:</th>
+      <td id="accuracy_readings">NaN%</td>
+      <td id="accuracy_meanings">NaN%</td>
+      <td id="accuracy_total">NaN%</td>
+    </tr>
+    <tr>
+      <th>Radicals:</th>
+      <td class="rad" id="radical_readings">---</td>
+      <td class="rad" id="radical_meanings">NaN%</td>
+      <td class="rad" id="radical_total">NaN%</td>
+    </tr>
+    <tr>
+      <th>Kanji:</th>
+      <td class="kan" id="kanji_readings">NaN%</td>
+      <td class="kan" id="kanji_meanings">NaN%</td>
+      <td class="kan" id="kanji_total">NaN%</td>
+    </tr>
+    <tr>
+      <th>Vocabulary:</th>
+      <td class="voc" id="vocabulary_readings">NaN%</td>
+      <td class="voc" id="vocabulary_meanings">NaN%</td>
+      <td class="voc" id="vocabulary_total">NaN%</td>
+    </tr>
+  </tbody></table>
+</section>
+
+</section>
+
+</body>
+</html>
