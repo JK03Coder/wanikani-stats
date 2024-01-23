@@ -124,6 +124,22 @@ def get_vocabulary_learned(col: Collection) -> int:
 
 
 def get_start_date(col: Collection) -> str:
+    config = mw.addonManager.getConfig(__name__)
+    manual_start_date = config.get("manualStartDate")
+
+    # If a manual start date is set, use it
+    if manual_start_date:
+        try:
+            # Validate and format the manual start date
+            manual_date = datetime.strptime(manual_start_date, '%Y-%m-%d')
+            days_ago = (datetime.utcnow() - manual_date).days
+            return f"{manual_start_date} ({days_ago} days ago)"
+        except ValueError:
+            return "Invalid manual start date format. Please use YYYY-MM-DD."
+
+    if manual_start_date:
+        return manual_start_date
+
     deck_name = "Wanikani Ultimate 3: Tokyo Drift"
 
     query = """
