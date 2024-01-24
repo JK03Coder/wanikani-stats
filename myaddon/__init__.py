@@ -1,8 +1,7 @@
-from math import floor
-from datetime import datetime
+from math import floor, ceil
+from datetime import datetime, timedelta
 
 from aqt import mw
-from aqt.utils import showInfo
 from aqt.qt import *
 import os
 
@@ -10,6 +9,9 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from anki.collection import Collection
 from aqt.operations import QueryOp
+
+config = mw.addonManager.getConfig(__name__)
+deck_name = config.get("deckName")
 
 
 def on_success(data: dict, web_view: QWebEngineView):
@@ -22,7 +24,8 @@ def on_success(data: dict, web_view: QWebEngineView):
     # Ensure JavaScript is executed after page load
     web_view.loadFinished.connect(_inject_data)
 
-def statFunction() -> None:
+
+def stat_function() -> None:
     dialog = QDialog(mw)
     dialog.setWindowTitle("WaniKani Stats")
     dialog.resize(550, 550)
@@ -49,25 +52,27 @@ if mw is None:
     raise RuntimeError("The 'mw' (main window) object is None. This addon cannot function without it.")
 else:
     action = QAction("WaniKani Stats", mw)
-    qconnect(action.triggered, statFunction)
+    qconnect(action.triggered, stat_function)
     mw.form.menuTools.addAction(action)
 
 
 def fetch_stats_op(col: Collection) -> dict:
+    user_level = get_user_level(col)
+
     stats_dict = {
-        "user_level": get_user_level(col),
+        "user_level": user_level,
+        "time_on_level": get_time_on_level(col, user_level),
         "radicals_learned": get_radicals_learned(col),
         "kanji_learned": get_kanji_learned(col),
         "vocabulary_learned": get_vocabulary_learned(col),
         "start_date": get_start_date(col),
+        "end_date": get_end_date(col),
     }
 
     return stats_dict
 
 
 def get_user_level(col: Collection) -> int:
-    deck_name = "Wanikani Ultimate 3: Tokyo Drift"
-
     # Use Anki's search functionality to find new cards in the specified deck, sorted by due order
     query = f'deck:"{deck_name}" is:new'
     new_card_ids = col.find_cards(query, order="due")
@@ -92,13 +97,46 @@ def get_user_level(col: Collection) -> int:
                 # Handle the case where the number is not valid
                 pass
 
-    # Return None if no relevant tag is found
-    return None
+    # Return 60 if no relevant tag is found
+    return 60
+
+
+def get_time_on_level(col: Collection, level: int) -> str:
+    tag = f"Lesson_{level}"
+    query_all_cards = f'deck:"{deck_name}" tag:{tag}'
+    card_ids = col.find_cards(query_all_cards)
+
+    if not card_ids:
+        return "No cards found for this level."
+
+    # Get the earliest review date for these cards
+    earliest_review_query = f"select min(id) from revlog where cid in ({','.join(map(str, card_ids))})"
+    earliest_review_timestamp = col.db.scalar(earliest_review_query)
+
+    if not earliest_review_timestamp:
+        return "No reviews found for this level."
+
+    # Convert the timestamp to a datetime object for the first review
+    earliest_review_date = datetime.utcfromtimestamp(earliest_review_timestamp / 1000)
+
+    # Determine the end date based on whether the level is completed
+    query_new_cards = f'deck:"{deck_name}" tag:{tag} is:new'
+    new_cards_remaining = len(col.find_cards(query_new_cards))
+
+    end_date = datetime.utcnow() if new_cards_remaining > 0 else earliest_review_date
+
+    # Calculate the time difference
+    time_diff = end_date - earliest_review_date
+
+    # Extract days, hours, and minutes
+    days = time_diff.days
+    hours, remainder = divmod(time_diff.seconds, 3600)
+    minutes = remainder // 60
+
+    return f"{days} days, {hours} hours, {minutes} minutes"
 
 
 def get_radicals_learned(col: Collection) -> int:
-    deck_name = "Wanikani Ultimate 3: Tokyo Drift"
-
     query = f'deck:"{deck_name}" -is:new ("tag:radical" or "Card_Type:Radical")'
     learned_radical_card_ids = col.find_cards(query)
 
@@ -106,25 +144,20 @@ def get_radicals_learned(col: Collection) -> int:
 
 
 def get_kanji_learned(col: Collection) -> int:
-    deck_name = "Wanikani Ultimate 3: Tokyo Drift"
-
     query = f'deck:"{deck_name}" -is:new ("tag:kanji" or "Card_Type:Kanji")'
     learned_kanji_card_ids = col.find_cards(query)
 
-    return floor(len(learned_kanji_card_ids)/2)
+    return floor(len(learned_kanji_card_ids) / 2)
 
 
 def get_vocabulary_learned(col: Collection) -> int:
-    deck_name = "Wanikani Ultimate 3: Tokyo Drift"
-
     query = f'deck:"{deck_name}" -is:new ("tag:vocabulary" or "Card_Type:Vocabulary")'
     learned_vocabulary_card_ids = col.find_cards(query)
 
-    return floor(len(learned_vocabulary_card_ids)/2)
+    return floor(len(learned_vocabulary_card_ids) / 2)
 
 
 def get_start_date(col: Collection) -> str:
-    config = mw.addonManager.getConfig(__name__)
     manual_start_date = config.get("manualStartDate")
 
     # If a manual start date is set, use it
@@ -132,15 +165,13 @@ def get_start_date(col: Collection) -> str:
         try:
             # Validate and format the manual start date
             manual_date = datetime.strptime(manual_start_date, '%Y-%m-%d')
-            days_ago = (datetime.utcnow() - manual_date).days
+            days_ago = (datetime.utcnow() - manual_date).days + 1
             return f"{manual_start_date} ({days_ago} days ago)"
         except ValueError:
             return "Invalid manual start date format. Please use YYYY-MM-DD."
 
     if manual_start_date:
         return manual_start_date
-
-    deck_name = "Wanikani Ultimate 3: Tokyo Drift"
 
     query = """
         select min(id) from revlog 
@@ -162,3 +193,24 @@ def get_start_date(col: Collection) -> str:
         return f"{date_str} ({days_ago} days ago)"
     else:
         return "---"
+
+
+def get_end_date(col: Collection) -> str:
+    # Get deck ID
+    deck_id = col.decks.id(deck_name)
+
+    # Number of new cards remaining
+    new_card_query = f'deck:"{deck_name}" is:new'
+    new_cards_remaining = len(col.find_cards(new_card_query))
+
+    # Daily new card limit
+    daily_new_limit = col.decks.confForDid(deck_id)["new"]["perDay"]
+
+    # Calculate days remaining
+    days_remaining = ceil(new_cards_remaining / daily_new_limit)
+
+    # Calculate estimated end date
+    estimated_end_date = datetime.utcnow().date() + timedelta(days=days_remaining)
+    end_date_str = estimated_end_date.strftime('%Y-%m-%d')
+
+    return f"{end_date_str} ({days_remaining} days)"
