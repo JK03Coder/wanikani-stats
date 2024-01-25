@@ -1,5 +1,6 @@
 from math import floor, ceil
 from datetime import datetime, timedelta
+import json
 
 from aqt import mw
 from aqt.qt import *
@@ -18,7 +19,8 @@ def on_success(data: dict, web_view: QWebEngineView):
     def _inject_data():
         js_code = ""
         for key, value in data.items():
-            js_code += f"document.getElementById('{key}').innerText = '{value}';"
+            safe_value = json.dumps(value)  # Serialize the string for safe JavaScript injection
+            js_code += f"document.getElementById('{key}').innerText = {safe_value};"
         web_view.page().runJavaScript(js_code)
 
     # Ensure JavaScript is executed after page load
@@ -62,6 +64,7 @@ def fetch_stats_op(col: Collection) -> dict:
     stats_dict = {
         "user_level": user_level,
         "time_on_level": get_time_on_level(col, user_level),
+        "typical_levelup": get_time_on_level(col, 1),
         "radicals_learned": get_radicals_learned(col),
         "kanji_learned": get_kanji_learned(col),
         "vocabulary_learned": get_vocabulary_learned(col),
@@ -119,11 +122,30 @@ def get_time_on_level(col: Collection, level: int) -> str:
     # Convert the timestamp to a datetime object for the first review
     earliest_review_date = datetime.utcfromtimestamp(earliest_review_timestamp / 1000)
 
+    if level == 1:
+        manual_start_date_str = config.get("manualStartDate")
+        if manual_start_date_str:
+            # Convert the manual start date string to a datetime object with default time
+            manual_start_date = datetime.strptime(manual_start_date_str, '%Y-%m-%d')
+            earliest_review_date = manual_start_date
+
     # Determine the end date based on whether the level is completed
     query_new_cards = f'deck:"{deck_name}" tag:{tag} is:new'
-    new_cards_remaining = len(col.find_cards(query_new_cards))
+    new_card_ids = col.find_cards(query_new_cards)
 
-    end_date = datetime.utcnow() if new_cards_remaining > 0 else earliest_review_date
+    if new_card_ids:
+        sorted_card_ids = sorted(card_ids, key=lambda cid: col.get_card(cid).due)
+        last_card_id = sorted_card_ids[-1]
+
+        first_review_query = f"select min(id) from revlog where cid = {last_card_id}"
+        first_review_timestamp = col.db.scalar(first_review_query)
+
+        if first_review_timestamp:
+            end_date = datetime.utcfromtimestamp(first_review_timestamp / 1000)
+        else:
+            end_date = datetime.utcnow()
+    else:
+        end_date = datetime.utcnow()
 
     # Calculate the time difference
     time_diff = end_date - earliest_review_date
@@ -134,6 +156,40 @@ def get_time_on_level(col: Collection, level: int) -> str:
     minutes = remainder // 60
 
     return f"{days} days, {hours} hours, {minutes} minutes"
+
+
+def get_typical_levelup(col: Collection, current_level: int) -> str:
+    def parse_time(time_string: str) -> int:
+        if "No" in time_str:
+            return -1
+        parts = time_string.split(', ')
+        days = int(parts[0].split(' ')[0])
+        hours = int(parts[1].split(' ')[0])
+        minutes = int(parts[2].split(' ')[0])
+        return days * 24 * 60 + hours * 60 + minutes
+
+    total_minutes = 0
+    valid_levels_count = 0
+
+    for level in range(1, current_level):
+        time_str = get_time_on_level(col, level)  # Assuming this function exists
+        parsed_time = parse_time(time_str)
+        if parsed_time == -1:
+            return f"Parsing failed on level {level}"
+        total_minutes += parsed_time
+        valid_levels_count += 1
+
+    if valid_levels_count == 0:
+        return "No valid data available for averaging."
+
+    avg_minutes = total_minutes // valid_levels_count
+
+    avg_days = avg_minutes // (24 * 60)
+    avg_minutes %= (24 * 60)
+    avg_hours = avg_minutes // 60
+    avg_minutes %= 60
+
+    return f"{avg_days} days, {avg_hours} hours, {avg_minutes} minutes"
 
 
 def get_radicals_learned(col: Collection) -> int:
@@ -169,9 +225,6 @@ def get_start_date(col: Collection) -> str:
             return f"{manual_start_date} ({days_ago} days ago)"
         except ValueError:
             return "Invalid manual start date format. Please use YYYY-MM-DD."
-
-    if manual_start_date:
-        return manual_start_date
 
     query = """
         select min(id) from revlog 
