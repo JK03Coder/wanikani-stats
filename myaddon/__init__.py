@@ -204,7 +204,7 @@ def get_end_date(col: Collection) -> str:
     new_cards_remaining = len(col.find_cards(new_card_query))
 
     # Daily new card limit
-    daily_new_limit = col.decks.confForDid(deck_id)["new"]["perDay"]
+    daily_new_limit = col.decks.config_dict_for_deck_id(deck_id)["new"]["perDay"]
 
     # Calculate days remaining
     days_remaining = ceil(new_cards_remaining / daily_new_limit)
