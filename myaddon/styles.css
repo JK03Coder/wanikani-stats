@@ -84,7 +84,7 @@
   padding: 0 .5em;
 }
 
-
+.main-content table[name="current_status"] tr.border-bottom,
 .main-content table[name="accuracy"] tr.border-bottom {
   border-bottom: 1px solid #dee2e6;
 }

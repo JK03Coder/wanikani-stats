@@ -64,7 +64,7 @@ def fetch_stats_op(col: Collection) -> dict:
     stats_dict = {
         "user_level": user_level,
         "time_on_level": get_time_on_level(col, user_level),
-        "typical_levelup": get_time_on_level(col, 15),
+        "typical_levelup": get_typical_levelup(col, user_level),
         "radicals_learned": get_radicals_learned(col),
         "kanji_learned": get_kanji_learned(col),
         "vocabulary_learned": get_vocabulary_learned(col),
@@ -110,14 +110,14 @@ def get_time_on_level(col: Collection, level: int) -> str:
     card_ids = col.find_cards(query_all_cards)
 
     if not card_ids:
-        return "No cards found for this level."
+        return "Error: No cards found for this level."
 
     # Get the earliest review date for these cards
     earliest_review_query = f"select min(id) from revlog where cid in ({','.join(map(str, card_ids))})"
     earliest_review_timestamp = col.db.scalar(earliest_review_query)
 
     if not earliest_review_timestamp:
-        return "No reviews found for this level."
+        return "Error: No reviews found for this level."
 
     # Convert the timestamp to a datetime object for the first review
     earliest_review_date = datetime.utcfromtimestamp(earliest_review_timestamp / 1000)
@@ -154,7 +154,7 @@ def get_time_on_level(col: Collection, level: int) -> str:
             # Convert timestamp to datetime
             end_date = datetime.utcfromtimestamp(last_earliest_review_timestamp / 1000)
         else:
-            return "Query returned something bad"
+            return "Error: Query returned something bad"
     else:
         print(f"used current date for end date on level {level}")
         end_date = datetime.utcnow()
@@ -173,7 +173,7 @@ def get_time_on_level(col: Collection, level: int) -> str:
 
 def get_typical_levelup(col: Collection, current_level: int) -> str:
     def parse_time(time_string: str) -> int:
-        if "No" in time_str:
+        if "Error" in time_str:
             return -1
         parts = time_string.split(', ')
         days = int(parts[0].split(' ')[0])
