@@ -64,7 +64,7 @@ def fetch_stats_op(col: Collection) -> dict:
     stats_dict = {
         "user_level": user_level,
         "time_on_level": get_time_on_level(col, user_level),
-        "typical_levelup": get_time_on_level(col, 1),
+        "typical_levelup": get_time_on_level(col, 15),
         "radicals_learned": get_radicals_learned(col),
         "kanji_learned": get_kanji_learned(col),
         "vocabulary_learned": get_vocabulary_learned(col),
@@ -121,6 +121,7 @@ def get_time_on_level(col: Collection, level: int) -> str:
 
     # Convert the timestamp to a datetime object for the first review
     earliest_review_date = datetime.utcfromtimestamp(earliest_review_timestamp / 1000)
+    print(f"lvl {level}", earliest_review_date)
 
     if level == 1:
         manual_start_date_str = config.get("manualStartDate")
@@ -133,20 +134,32 @@ def get_time_on_level(col: Collection, level: int) -> str:
     query_new_cards = f'deck:"{deck_name}" tag:{tag} is:new'
     new_card_ids = col.find_cards(query_new_cards)
 
-    if new_card_ids:
-        sorted_card_ids = sorted(card_ids, key=lambda cid: col.get_card(cid).due)
-        last_card_id = sorted_card_ids[-1]
+    if not new_card_ids:
+        # SQL query to find the earliest review timestamp for each card
+        earliest_review_query_for_each_card = f"""
+        SELECT cid, MIN(id) as earliest_review_timestamp
+        FROM revlog
+        WHERE cid IN ({','.join(map(str, card_ids))})
+        GROUP BY cid
+        """
 
-        first_review_query = f"select min(id) from revlog where cid = {last_card_id}"
-        first_review_timestamp = col.db.scalar(first_review_query)
+        # Execute the query and fetch all results
+        earliest_reviews = col.db.all(earliest_review_query_for_each_card)
 
-        if first_review_timestamp:
-            end_date = datetime.utcfromtimestamp(first_review_timestamp / 1000)
+        # Sort the results by timestamp and get the last one
+        if earliest_reviews:
+            last_earliest_review = sorted(earliest_reviews, key=lambda x: x[1])[-1]
+            last_earliest_review_timestamp = last_earliest_review[1]
+
+            # Convert timestamp to datetime
+            end_date = datetime.utcfromtimestamp(last_earliest_review_timestamp / 1000)
         else:
-            end_date = datetime.utcnow()
+            return "Query returned something bad"
     else:
+        print(f"used current date for end date on level {level}")
         end_date = datetime.utcnow()
 
+    print(f"lvl {level}", end_date)
     # Calculate the time difference
     time_diff = end_date - earliest_review_date
 
@@ -172,7 +185,7 @@ def get_typical_levelup(col: Collection, current_level: int) -> str:
     valid_levels_count = 0
 
     for level in range(1, current_level):
-        time_str = get_time_on_level(col, level)  # Assuming this function exists
+        time_str = get_time_on_level(col, level)
         parsed_time = parse_time(time_str)
         if parsed_time == -1:
             return f"Parsing failed on level {level}"
