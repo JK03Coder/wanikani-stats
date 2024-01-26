@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>WaniKani Stats</title>
   <link rel="stylesheet" href="styles.css">
+  <script type="text/javascript" src="qrc:///qtwebchannel/qwebchannel.js"></script>
 </head>
 <body>
 
@@ -17,15 +18,19 @@
       <th>Level:</th>
       <td id="user_level">?</td>
     </tr>
-    <tr id="typical_levelup_row">
+    <tr id="typical_levelup_row" hidden="">
       <th>Typical Level-up:</th>
       <td id="typical_levelup">   0 days,  0 hours,  0 minutes</td>
+    </tr>
+    <tr>
+      <th>Previous Level-up:</th>
+      <td id="previous_levelup">   0 days,  0 hours, 0 minutes</td>
     </tr>
     <tr>
       <th>Time on Level:</th>
       <td id="time_on_level">   0 days,  0 hours, 0 minutes</td>
     </tr>
-    <tr class="level_up_in">
+    <tr class="level_up_in" hidden="">
       <th>Level-up In:</th>
       <td id="levelup_in">   0 days,  0 hours,  0 minutes</td>
     </tr>

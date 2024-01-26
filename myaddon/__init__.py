@@ -1,18 +1,29 @@
 from math import floor, ceil
 from datetime import datetime, timedelta
 import json
-
-from aqt import mw
-from aqt.qt import *
 import os
 
-from PyQt6.QtWebEngineWidgets import QWebEngineView
+from aqt import mw
+from aqt.qt import (
+    QAction, QDialog, QVBoxLayout, QWebEngineView, QUrl, qconnect, QObject, pyqtSlot, QWebChannel
+)
 
 from anki.collection import Collection
 from aqt.operations import QueryOp
 
 config = mw.addonManager.getConfig(__name__)
 deck_name = config.get("deckName")
+
+
+class Bridge(QObject):
+    @pyqtSlot(str)
+    def receiveMessageFromJs(self, message):
+        print("Message from JS:", message)
+        # You can add more code here to handle the message
+
+    @pyqtSlot(result=str)
+    def sendMessageToJs(self):
+        return "Message from Python"
 
 
 def on_success(data: dict, web_view: QWebEngineView):
@@ -35,6 +46,15 @@ def stat_function() -> None:
     web_view = QWebEngineView(dialog)
     layout = QVBoxLayout(dialog)
     layout.addWidget(web_view)
+
+    bridge = Bridge()
+
+    # Create a QWebChannel object and set the Bridge instance to it
+    channel = QWebChannel()
+    channel.registerObject('bridge', bridge)
+
+    # Set the channel to the web view
+    web_view.page().setWebChannel(channel)
 
     html_file_path = os.path.join(os.path.dirname(__file__), "stats.html")
     web_view.load(QUrl.fromLocalFile(html_file_path))
@@ -64,7 +84,7 @@ def fetch_stats_op(col: Collection) -> dict:
     stats_dict = {
         "user_level": user_level,
         "time_on_level": get_time_on_level(col, user_level),
-        "typical_levelup": get_typical_levelup(col, user_level),
+        "previous_levelup": get_time_on_level(col, user_level-1),
         "radicals_learned": get_radicals_learned(col),
         "kanji_learned": get_kanji_learned(col),
         "vocabulary_learned": get_vocabulary_learned(col),
@@ -121,7 +141,6 @@ def get_time_on_level(col: Collection, level: int) -> str:
 
     # Convert the timestamp to a datetime object for the first review
     earliest_review_date = datetime.utcfromtimestamp(earliest_review_timestamp / 1000)
-    print(f"lvl {level}", earliest_review_date)
 
     if level == 1:
         manual_start_date_str = config.get("manualStartDate")
@@ -156,10 +175,8 @@ def get_time_on_level(col: Collection, level: int) -> str:
         else:
             return "Error: Query returned something bad"
     else:
-        print(f"used current date for end date on level {level}")
         end_date = datetime.utcnow()
 
-    print(f"lvl {level}", end_date)
     # Calculate the time difference
     time_diff = end_date - earliest_review_date
 
@@ -167,6 +184,8 @@ def get_time_on_level(col: Collection, level: int) -> str:
     days = time_diff.days
     hours, remainder = divmod(time_diff.seconds, 3600)
     minutes = remainder // 60
+
+    print(f"Level {level} = {days} days, {hours} hours, {minutes} minutes")
 
     return f"{days} days, {hours} hours, {minutes} minutes"
 
