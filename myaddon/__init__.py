@@ -78,21 +78,129 @@ else:
     mw.form.menuTools.addAction(action)
 
 
+def calculate_accuracy(correct, total):
+    # Calculate percentage with safe check for zero total
+    return "{:.2f}%".format((correct / total * 100) if total > 0 else 0)
+
+
 def fetch_stats_op(col: Collection) -> dict:
     user_level = get_user_level(col)
+
+    print(get_typical_levelup(col, user_level))
+
+    review_counts = get_review_counts(col)  # Get the review counts
+    total_readings = review_counts['kanji_reading']['total'] + review_counts['vocabulary_reading']['total']
+    total_meanings = review_counts['radical_meaning']['total'] + review_counts['kanji_meaning']['total'] + \
+                     review_counts['vocabulary_meaning']['total']
+    total_reviews = total_readings + total_meanings
+
+    incorrect_readings = review_counts['kanji_reading']['incorrect'] + review_counts['vocabulary_reading']['incorrect']
+    incorrect_meanings = review_counts['radical_meaning']['incorrect'] + review_counts['kanji_meaning']['incorrect'] + \
+                         review_counts['vocabulary_meaning']['incorrect']
+    incorrect_reviews = incorrect_readings + incorrect_meanings
+
+    correct_readings = total_readings - incorrect_readings
+    correct_meanings = total_meanings - incorrect_meanings
+    correct_reviews = total_reviews - incorrect_reviews
+
+    accuracy_readings = calculate_accuracy(correct_readings, total_readings)
+    accuracy_meanings = calculate_accuracy(correct_meanings, total_meanings)
+    accuracy_total = calculate_accuracy(correct_reviews, total_reviews)
 
     stats_dict = {
         "user_level": user_level,
         "time_on_level": get_time_on_level(col, user_level),
-        "previous_levelup": get_time_on_level(col, user_level-1),
+        "previous_levelup": get_time_on_level(col, user_level - 1),
         "radicals_learned": get_radicals_learned(col),
         "kanji_learned": get_kanji_learned(col),
         "vocabulary_learned": get_vocabulary_learned(col),
         "start_date": get_start_date(col),
         "end_date": get_end_date(col),
+        "total_readings": total_readings,
+        "total_meanings": total_meanings,
+        "total_reviews": total_reviews,
+        "correct_readings": correct_readings,
+        "correct_meanings": correct_meanings,
+        "correct_reviews": correct_reviews,
+        "incorrect_readings": incorrect_readings,
+        "incorrect_meanings": incorrect_meanings,
+        "incorrect_reviews": incorrect_reviews,
+        "accuracy_readings": accuracy_readings,
+        "accuracy_meanings": accuracy_meanings,
+        "accuracy_total": accuracy_total,
+        "radical_meanings": calculate_accuracy(
+            review_counts['radical_meaning']['total'] - review_counts['radical_meaning']['incorrect'],
+            review_counts['radical_meaning']['total']),
+        "radical_total": calculate_accuracy(
+            review_counts['radical_meaning']['total'] - review_counts['radical_meaning']['incorrect'],
+            review_counts['radical_meaning']['total']),
+        "kanji_readings": calculate_accuracy(
+            review_counts['kanji_reading']['total'] - review_counts['kanji_reading']['incorrect'],
+            review_counts['kanji_reading']['total']),
+        "kanji_meanings": calculate_accuracy(
+            review_counts['kanji_meaning']['total'] - review_counts['kanji_meaning']['incorrect'],
+            review_counts['kanji_meaning']['total']),
+        "kanji_total": calculate_accuracy(
+            (review_counts['kanji_meaning']['total'] + review_counts['kanji_reading']['total']) - (
+                    review_counts['kanji_meaning']['incorrect'] + review_counts['kanji_reading']['incorrect']),
+            (review_counts['kanji_meaning']['total'] + review_counts['kanji_reading']['total'])),
+        "vocabulary_readings": calculate_accuracy(
+            review_counts['vocabulary_reading']['total'] - review_counts['vocabulary_reading']['incorrect'],
+            review_counts['vocabulary_reading']['total']),
+        "vocabulary_meanings": calculate_accuracy(
+            review_counts['vocabulary_meaning']['total'] - review_counts['vocabulary_meaning']['incorrect'],
+            review_counts['vocabulary_meaning']['total']),
+        "vocabulary_total": calculate_accuracy(
+            (review_counts['vocabulary_meaning']['total'] + review_counts['vocabulary_reading']['total']) - (
+                    review_counts['vocabulary_meaning']['incorrect'] + review_counts['vocabulary_reading'][
+                'incorrect']),
+            (review_counts['vocabulary_meaning']['total'] + review_counts['vocabulary_reading']['total']))
     }
 
     return stats_dict
+
+
+def get_review_counts(col: Collection) -> dict:
+    stats = {
+        "radical_meaning": {"total": 0, "incorrect": 0},
+        "kanji_meaning": {"total": 0, "incorrect": 0},
+        "kanji_reading": {"total": 0, "incorrect": 0},
+        "vocabulary_meaning": {"total": 0, "incorrect": 0},
+        "vocabulary_reading": {"total": 0, "incorrect": 0}
+    }
+
+    for card_type in ["radical", "kanji", "vocabulary"]:
+        for review_type in ["reading", "meaning"]:
+            if card_type == "radical" and review_type == "reading":
+                # Skip reading for radicals, assuming they don't exist
+                continue
+
+            # Construct the query to get review counts
+            card_query = f'"deck:{deck_name}" card:{review_type} card_type:{card_type} -is:new'
+            card_ids = col.find_cards(card_query)
+
+            if card_ids:
+                # Get review logs for these cards
+                review_logs = col.db.all(
+                    "SELECT ease, COUNT(*) FROM revlog WHERE cid IN ({}) GROUP BY ease".format(
+                        ",".join(str(cid) for cid in card_ids)
+                    )
+                )
+
+                # Process the review logs
+                total_reviews = 0
+                incorrect_reviews = 0
+                for ease, count in review_logs:
+                    total_reviews += count
+                    if ease == 1:  # Incorrect
+                        incorrect_reviews += count
+
+                # Update stats dictionary
+                stats_key = f"{card_type}_{review_type}"
+                stats[stats_key]["total"] = total_reviews
+                stats[stats_key]["incorrect"] = incorrect_reviews
+
+    return stats
 
 
 def get_user_level(col: Collection) -> int:
