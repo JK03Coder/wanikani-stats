@@ -86,8 +86,6 @@ def calculate_accuracy(correct, total):
 def fetch_stats_op(col: Collection) -> dict:
     user_level = get_user_level(col)
 
-    print(get_typical_levelup(col, user_level))
-
     review_counts = get_review_counts(col)  # Get the review counts
     total_readings = review_counts['kanji_reading']['total'] + review_counts['vocabulary_reading']['total']
     total_meanings = review_counts['radical_meaning']['total'] + review_counts['kanji_meaning']['total'] + \
